@@ -7,16 +7,15 @@ class ParsecAirfoil(trt.HasTraits):
     A traitleted PARametric SECtion (PARSEC) Airfoil.
     
     Credit:
-    * Based on Marc Bodmer's implementation
-    * https://github.com/mbodmer/libairfoil/blob/master/libairfoil/parsec.py
+    * Based on Marc Bodmer's implementation (https://github.com/mbodmer/libairfoil/blob/master/libairfoil/parsec.py)
     
     References:
-    - Parametric Airfoils and Wings, by Helmut Sobieczky,
-      http://www.as.dlr.de/hs/h-pdf/H141.pdf
-    - Representation Method Effects on Vibrational Genetic Algorithm in 2D Airfoil Design, Y.V.Pehlivanoglu
-      http://www.hho.edu.tr/HutenDergi/2009TEMMUZ/5_PEHLIVANOGLU.pdf
-    - Aerodynamic Shape Optimization using Computer Mapping of Natural Evolution Process, Selvakumar/Mukesh
-      http://sumo.intec.ugent.be/system/files/private/Selva_1_china.pdf
+    - "Parametric Airfoils and Wings" by Helmut Sobieczky (http://www.as.dlr.de/hs/h-pdf/H141.pdf)
+    
+    TODO:
+    * Add blending
+    * Add finite trailing edge
+    * Make thickness and camber the source parameters for `upper_z` and `lower_z`?
     
     """
     
@@ -34,7 +33,7 @@ class ParsecAirfoil(trt.HasTraits):
     te_beta = trt.Float(np.radians(20.0), min=-np.pi, max=np.pi, help="Trailing edge wedge angle")
 
     # te_thickness = trt.Float(0.0, min=0.0, max=1.0, help="Trailing edge thickness")
-    # blending = trt.Float(0.0, min=-1.0, max=1.0, help="Blending parameter")
+    # blending = trt.Float(0.0, min=-1.0, max=1.0, help="Blend with NACA0012 (-1) or Whitcomb (+1) airfoils")
     
     _upper_coefficients = trt.Tuple(help="Coefficients used to calculate the upper surface")
     _lower_coefficients = trt.Tuple(help="Coefficients used to calculate the lower surface")
@@ -73,7 +72,7 @@ class ParsecAirfoil(trt.HasTraits):
                 x, 
                 sum(
                     k * x ** (0.5 + i)
-                    for k, i in zip(coefficients, range(6))
+                    for k, i in zip(coefficients, range(len(coefficients)))
                 )
             )
         )
@@ -90,7 +89,6 @@ class ParsecAirfoil(trt.HasTraits):
     
     def A(self, upper: bool) -> np.ndarray:
         """Calculate the A matrix."""
-        
         x = self.upper_x if upper else self.lower_x
         
         return np.array([
@@ -104,7 +102,6 @@ class ParsecAirfoil(trt.HasTraits):
 
     def B(self, upper: bool) -> np.ndarray:
         """Calculate the B vector."""
-        
         sign = 1 if upper else -1
         
         return np.array([
@@ -115,4 +112,3 @@ class ParsecAirfoil(trt.HasTraits):
             self.upper_c if upper else self.lower_c,
             sign * np.sqrt(2 * self.le_radius),
         ])
-
