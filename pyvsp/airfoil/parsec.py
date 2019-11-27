@@ -79,7 +79,7 @@ class ParsecAirfoil(trt.HasTraits):
         )
     
     def _calculate_coordinates(self):
-        x = np.linspace(0, 1, self.num_points)
+        x = 0.5 * (1 + np.cos(np.linspace(np.pi, 0, self.num_points)))
         return (
             self._calculate_surface_coordinates(self._upper_coefficients, x) +
             list(reversed(self._calculate_surface_coordinates(self._lower_coefficients, x)))
