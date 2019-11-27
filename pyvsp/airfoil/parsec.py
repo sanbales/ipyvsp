@@ -14,7 +14,6 @@ class ParsecAirfoil(trt.HasTraits):
     
     TODO:
     * Add blending
-    * Add finite trailing edge
     * Make thickness and camber the source parameters for `upper_z` and `lower_z`?
     
     """
@@ -32,7 +31,7 @@ class ParsecAirfoil(trt.HasTraits):
     te_alpha = trt.Float(0.0, min=-np.pi, max=np.pi, help="Trailing edge direction angle")
     te_beta = trt.Float(np.radians(20.0), min=-np.pi, max=np.pi, help="Trailing edge wedge angle")
 
-    # te_thickness = trt.Float(0.0, min=0.0, max=1.0, help="Trailing edge thickness")
+    te_thickness = trt.Float(0.0, min=0.0, max=1.0, help="Trailing edge thickness, max=1.0 equates to a thickness of 1% chord")
     # blending = trt.Float(0.0, min=-1.0, max=1.0, help="Blend with NACA0012 (-1) or Whitcomb (+1) airfoils")
     
     _upper_coefficients = trt.Tuple(help="Coefficients used to calculate the upper surface")
@@ -53,11 +52,11 @@ class ParsecAirfoil(trt.HasTraits):
     def _default_coordinates(self):
         return self._calculate_coordinates()
     
-    @trt.observe("upper_x", "upper_z", "upper_c", "le_radius", "te_z", "te_alpha", "te_beta")  # "te_thickness", "blending"
+    @trt.observe("upper_x", "upper_z", "upper_c", "le_radius", "te_z", "te_alpha", "te_beta", "te_thickness")  # "blending"
     def _update_upper_coefficients(self, *_):
         self._upper_coefficients = self._calculate_coefficients(upper=True)
         
-    @trt.observe("lower_x", "lower_z", "lower_c", "le_radius", "te_z", "te_alpha", "te_beta")  # "te_thickness", "blending"
+    @trt.observe("lower_x", "lower_z", "lower_c", "le_radius", "te_z", "te_alpha", "te_beta", "te_thickness")  # "blending"
     def _update_lower_coefficients(self, *_):
         self._lower_coefficients = self._calculate_coefficients(upper=False)
     
@@ -105,7 +104,7 @@ class ParsecAirfoil(trt.HasTraits):
         sign = 1 if upper else -1
         
         return np.array([
-            self.te_z,
+            self.te_z + 0.005 * sign * self.te_thickness,
             self.upper_z if upper else self.lower_z,
             np.tan(self.te_alpha - sign * 0.5 * self.te_beta),
             0.0,
