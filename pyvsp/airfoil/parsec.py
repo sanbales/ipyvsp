@@ -14,7 +14,6 @@ class ParsecAirfoil(trt.HasTraits):
     
     TODO:
     * Add blending
-    * Make thickness and camber the source parameters for `upper_z` and `lower_z`?
     
     """
     
