@@ -18,11 +18,14 @@ class ParsecAirfoil(trt.HasTraits):
     
     """
     
-    upper_x = trt.Float( 0.400, min=0.01, max=1.0, help="Upper crest location horizontal coordinate")
+    name = trt.Unicode("Custom Airfoil", help="The designation given to this airfoil")
+    description = trt.Unicode("", help="Summary characteristics and/or notes about this airfoil")
+    
+    upper_x = trt.Float( 0.400, min=0.01, max=0.99, help="Upper crest location horizontal coordinate")
     upper_z = trt.Float( 0.075, min=-1.0, max=1.0, help="Upper crest location vertical coordinate")
     upper_c = trt.Float(-0.100, min=-1.0, max=1.0, help="Upper crest location curvature")
     
-    lower_x = trt.Float( 0.400, min=0.01, max=1.0, help="Lower crest location horizontal coordinate")
+    lower_x = trt.Float( 0.400, min=0.01, max=0.99, help="Lower crest location horizontal coordinate")
     lower_z = trt.Float(-0.075, min=-1.0, max=1.0, help="Lower crest location vertical coordinate")
     lower_c = trt.Float( 0.100, min=-1.0, max=1.0, help="Lower crest location curvature")
     
@@ -40,6 +43,9 @@ class ParsecAirfoil(trt.HasTraits):
     num_points = trt.Int(200, min=50, max=1000, help="The number of horizontally equally distributed points to use")
     coordinates = trt.Tuple(help="The (x,y) points that make up the airfoil, defined clockwise starting at the leading edge")
     
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+    
     @trt.default("_upper_coefficients")
     def _default_upper_coefficients(self):
         return self._calculate_coefficients(upper=True)
@@ -52,15 +58,15 @@ class ParsecAirfoil(trt.HasTraits):
     def _default_coordinates(self):
         return self._calculate_coordinates()
     
-    @trt.observe("upper_x", "upper_z", "upper_c", "le_radius", "te_z", "te_alpha", "te_beta", "te_thickness")  # "blending"
+    @trt.observe("upper_x", "upper_z", "upper_c", "le_radius", "te_z", "te_alpha", "te_beta", "te_thickness")
     def _update_upper_coefficients(self, *_):
         self._upper_coefficients = self._calculate_coefficients(upper=True)
         
-    @trt.observe("lower_x", "lower_z", "lower_c", "le_radius", "te_z", "te_alpha", "te_beta", "te_thickness")  # "blending"
+    @trt.observe("lower_x", "lower_z", "lower_c", "le_radius", "te_z", "te_alpha", "te_beta", "te_thickness")
     def _update_lower_coefficients(self, *_):
         self._lower_coefficients = self._calculate_coefficients(upper=False)
     
-    @trt.observe("num_points", "_upper_coefficients", "_lower_coefficients")
+    @trt.observe("num_points", "_upper_coefficients", "_lower_coefficients")  # "blending"
     def _update_coordinates(self, *_):
         self.coordinates = self._calculate_coordinates()
     
@@ -111,3 +117,29 @@ class ParsecAirfoil(trt.HasTraits):
             self.upper_c if upper else self.lower_c,
             sign * np.sqrt(2 * self.le_radius),
         ])
+
+
+class SimplifiedParsecAirfoil(ParsecAirfoil):
+    """A simplified way to defined an airfoil using the PARSEC definition."""
+    
+    camber = trt.Float(0.0, min=-1, max=1, help="Notional camber figure for the airfoil")
+    crest_x = trt.Float(0.3, min=0.01, max=0.99, help="Location of the upper and lower crest")
+    thickness = trt.Float(0.12, min=0.01, max=0.30, help="The airfoil thickness as a fraction of chord length")
+    
+    # Remove unnecessary observers
+    _update_lower_coefficients = None
+    _update_upper_coefficients = None
+    _update_coordinates = None
+    
+    @trt.observe("upper_c", "lower_c", "crest_x", "thickness", "camber", "le_radius", "te_z", "te_alpha", "te_beta", "te_thickness", "num_points")
+    def _update_coefficients(self, *_):
+        self.upper_z = +0.5 * self.thickness + self.camber * 0.01
+        self.lower_z = -0.5 * self.thickness + self.camber * 0.01
+
+        self.upper_x = self.crest_x
+        self.lower_x = self.crest_x
+
+        self._upper_coefficients = self._calculate_coefficients(upper=True)
+        self._lower_coefficients = self._calculate_coefficients(upper=False)
+
+        self.coordinates = self._calculate_coordinates()
