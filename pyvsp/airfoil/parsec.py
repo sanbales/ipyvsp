@@ -1,8 +1,76 @@
+import re
+
 import numpy as np
 import traitlets as trt
 
 
-class ParsecAirfoil(trt.HasTraits):
+class Airfoil(trt.HasTraits):
+    """A traitleted abstract airfoil."""
+    name = trt.Unicode(
+        "Custom Airfoil",
+        help="The designation given to this airfoil",
+    )
+    
+    coordinates = trt.Tuple(help="The (x,y) points that make up the airfoil, defined clockwise starting at the leading edge")
+    
+    description = trt.Unicode(
+        "",
+        help="Summary characteristics and/or notes about this airfoil",
+    )
+    
+    
+class FourSeries(Airfoil):
+    regex = re.compile(r"^(?P<camber_max>[0-9])(?P<camber_pos>[0-9])(?P<thickness>[0-9]{2})$")
+    finite_trailing_edge = trt.Bool(True)
+    num_points = trt.Int(200, min=50, max=1000, help="The number of horizontally equally distributed points to use")
+    
+    @trt.validate("name")
+    def _validate_name(self, proposal):
+        value = proposal.value
+        if self.regex.match(value):
+            return value
+        raise trt.TraitError(f"'{value}' is not a valid NACA 4-Series definition!")
+    
+    @trt.observe("name")
+    def _update_coordinates(self, *_):
+        camber_max, camber_pos, *t = self.name
+        camber_max = 0.01 * float(camber_max)  # Maximum camber in 1% of chord
+        camber_pos = 0.1 * float(camber_pos)  # Maximum camber x location in 10% of chord
+        thickness = 0.01 * float(''.join(t))
+
+        a0, a1, a2, a3 = (0.2969, -0.1260, -0.3516, +0.2843)
+        a4 = -0.1015 if self.finite_trailing_edge else -0.1036
+
+        x = 0.5 * (1.0 - np.cos(np.linspace(0, np.pi, self.num_points)))
+
+        thickness = 5 * thickness * (a0 * np.sqrt(x) + np.polyval([a4, a3, a2, a1, 0], x))
+
+        if camber_pos == 0:
+            camber_angle = mean_camber = np.zeros(x.shape)
+        else:
+            mean_camber = np.concatenate((
+                (camber_max / camber_pos ** 2) * (2 * camber_pos * x[x<camber_pos] - np.power(x[x<camber_pos], 2)),
+                (camber_max / (1 - camber_pos) ** 2) * ((1 - 2 * camber_pos) + 2 * camber_pos * x[x>=camber_pos] - x[x>=camber_pos] ** 2),
+            ))
+            mean_camber_slope = np.concatenate((
+                (camber_max / camber_pos ** 2) * (2 * camber_pos - 2 * x[x<camber_pos]),
+                (camber_max / (1 - camber_pos) ** 2) * (2 * camber_pos - 2 * x[x>=camber_pos]),
+            ))
+            camber_angle = np.arctan(mean_camber_slope)
+
+        upper = np.vstack((
+            x - thickness * np.sin(camber_angle),
+            mean_camber + thickness * np.cos(camber_angle),
+        )).T
+        lower = np.vstack((
+            x + thickness * np.sin(camber_angle),
+            mean_camber - thickness * np.cos(camber_angle),
+        )).T
+
+        self.coordinates = tuple(np.concatenate((np.flip(upper, axis=0), lower[1:,:])))
+
+    
+class ParsecAirfoil(Airfoil):
     """
     A traitleted PARametric SECtion (PARSEC) Airfoil.
     
@@ -13,16 +81,28 @@ class ParsecAirfoil(trt.HasTraits):
     - "Parametric Airfoils and Wings" by Helmut Sobieczky (http://www.as.dlr.de/hs/h-pdf/H141.pdf)
     
     TODO:
-    * Add blending
+    * Add blending as per Sobieczky (between NACA0012 and Whitcomb Airfoils)
     
     """
     
-    name = trt.Unicode("Custom Airfoil", help="The designation given to this airfoil")
-    description = trt.Unicode("", help="Summary characteristics and/or notes about this airfoil")
-    
-    upper_x = trt.Float( 0.400, min=0.01, max=0.99, help="Upper crest location horizontal coordinate")
-    upper_z = trt.Float( 0.075, min=-1.0, max=1.0, help="Upper crest location vertical coordinate")
-    upper_c = trt.Float(-0.100, min=-1.0, max=1.0, help="Upper crest location curvature")
+    upper_x = trt.Float(
+        0.400,
+        min=0.01,
+        max=0.99,
+        help="Upper crest location horizontal coordinate",
+    )
+    upper_z = trt.Float(
+        0.075,
+        min=-1.0,
+        max=1.0,
+        help="Upper crest location vertical coordinate",
+    )
+    upper_c = trt.Float(
+        -0.100,
+        min=-1.0,
+        max=1.0,
+        help="Upper crest location curvature",
+    )
     
     lower_x = trt.Float( 0.400, min=0.01, max=0.99, help="Lower crest location horizontal coordinate")
     lower_z = trt.Float(-0.075, min=-1.0, max=1.0, help="Lower crest location vertical coordinate")
@@ -40,7 +120,6 @@ class ParsecAirfoil(trt.HasTraits):
     _lower_coefficients = trt.Tuple(help="Coefficients used to calculate the lower surface")
     
     num_points = trt.Int(200, min=50, max=1000, help="The number of horizontally equally distributed points to use")
-    coordinates = trt.Tuple(help="The (x,y) points that make up the airfoil, defined clockwise starting at the leading edge")
     
     def __repr__(self):
         return f"{self.__class__.__name__}('{self.name}')"
