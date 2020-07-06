@@ -1,5 +1,5 @@
 # ipyvsp
-A `experimental` pythonic Vehicle Sketch Pad.
+An `experimental` pythonic Vehicle Sketch Pad.
 
 ## Purpose
 Explore the feasibility of a pythonic parametric vehicle definition framework can be developed.
